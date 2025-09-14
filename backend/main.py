@@ -1,53 +1,42 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+# ВАЖНО: get_client_profile переименована в get_full_client_data
+from data_processor import get_full_client_data 
+# Импортируем наш "мозг"
+from logic_engine import find_best_product
 from models import ClientDashboardData, RecommendationRequest, RecommendationResponse
 
-# Создание экземпляра приложения
-app = FastAPI(
-    title="InsightEngine API",
-    version="1.0"
-)
-
-# Настройка CORS для Frontend
+app = FastAPI(title="InsightEngine API", version="1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Адрес вашего React-приложения
+    allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ===================================================================
-# API Эндпоинты
-# ===================================================================
-
 @app.get("/api/clients/{client_code}", response_model=ClientDashboardData)
 def get_client_data(client_code: int):
-    # ЗАГЛУШКА: Здесь будет логика получения данных из data_processor.py
-    # Пока что возвращаем фейковые данные для проверки работы
-    if client_code == 1:
-        return {
-            "client_code": 1,
-            "name": "Айгерим",
-            "status": "Зарплатный клиент",
-            "age": 28,
-            "city": "Алматы",
-            "avg_monthly_balance_KZT": 250000.00,
-            "total_spending_3m": 750000.00,
-            "top_categories": [
-                {"category": "Такси", "amount": 85000.00},
-                {"category": "Кафе и рестораны", "amount": 65000.00},
-                {"category": "Продукты питания", "amount": 50000.00}
-            ]
-        }
+    full_data = get_full_client_data(client_code)
+    if full_data:
+        # Собираем ответ для дашборда из полных данных
+        dashboard_data = {**full_data['profile'], **full_data['metrics']}
+        return dashboard_data
     raise HTTPException(status_code=404, detail=f"Client with code {client_code} not found")
 
 @app.post("/api/recommend", response_model=RecommendationResponse)
 def get_recommendation(request: RecommendationRequest):
-    # ЗАГЛУШКА: Здесь будет вызов logic_engine и notification_generator
-    if request.client_code == 1:
-        return {
-            "product": "Карта для путешествий",
-            "push_notification": "Айгерим, в августе вы сделали 15 поездок на такси на 85 000 ₸. С картой для путешествий вернули бы ≈3 400 ₸. Откройте карту в приложении. 🚀"
-        }
-    raise HTTPException(status_code=404, detail=f"Client with code {request.client_code} not found")
+    full_data = get_full_client_data(request.client_code)
+    if not full_data:
+        raise HTTPException(status_code=404, detail=f"Client with code {request.client_code} not found")
+
+    # Получаем лучший продукт от нашего движка
+    best_product, benefit = find_best_product(request.client_code, full_data)
+    
+    # ЗАГЛУШКА для текста пуша (следующий шаг - notification_generator.py)
+    push_text = f"Для вас есть выгодное предложение по продукту '{best_product}' с потенциальной выгодой {benefit} ₸. Подробности скоро."
+
+    return {
+        "product": best_product,
+        "push_notification": push_text,
+    }
