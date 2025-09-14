@@ -3,28 +3,39 @@ from typing import Tuple, List
 
 # --- КОНСТАНТЫ РАСЧЕТОВ (Техническая дисциплина) ---
 FX_SAVING_RATE = 0.01
-INVESTMENT_ANNUAL_YIELD = 0.15
-INVESTMENT_BALANCE_SHARE = 0.20
+INVESTMENT_ANNUAL_YIELD = 0.165 
+INVESTMENT_BALANCE_SHARE = 0.30 
 GOLD_ANNUAL_YIELD = 0.10
 GOLD_BALANCE_THRESHOLD = 7_000_000
 
 # --- СТРАТЕГИЧЕСКИЕ КОЭФФИЦИЕНТЫ (Мудрость рекомендации) ---
 STRATEGIC_COEFFICIENTS = {
-    "SAVER": { # Клиент-Накопитель
-        "products": ["Депозит Сберегательный", "Депозит Накопительный"],
+    "SAVER": {
+        "products": ["Депозит Накопительный"], # Сберегательный теперь для инвесторов
         "multiplier": 1.8 
     },
-    "SPENDER": { # Клиент-Транжира
+    "SPENDER": {
         "products": ["Кредитная карта", "Премиальная карта"],
         "multiplier": 1.5
     },
-    "TRAVELER": { # Клиент-Путешественник
+    "TRAVELER": {
         "products": ["Карта для путешествий", "Депозит Мультивалютный", "Обмен валют"],
         "multiplier": 1.7
+    },
+    # ИЗМЕНЕНИЕ 4.1: Профиль "ИНВЕСТОР" переориентирован на продукты сохранения капитала.
+    "INVESTOR": { 
+        "products": ["Депозит Сберегательный", "Золотые слитки"],
+        "multiplier": 2.5 
+    },
+    # ИЗМЕНЕНИЕ 4.2: Новый профиль для агрессивного продвижения инвестиций начинающим.
+    "NOVICE_INVESTOR": {
+        "products": ["Инвестиции"],
+        "multiplier": 2.2 # Сильный множитель для обеспечения приоритета
     }
 }
 
-# --- Функции-оценщики (score_*) остаются БЕЗ ИЗМЕНЕНИЙ ---
+# --- Функции-оценщики (score_*) ---
+
 def score_travel_card(data: dict) -> Tuple[str, float]:
     transactions = data['transactions_df']
     travel_categories = ['Путешествия', 'Такси', 'Отели']
@@ -33,8 +44,10 @@ def score_travel_card(data: dict) -> Tuple[str, float]:
     return "Карта для путешествий", round(benefit, 2)
 
 def score_premium_card(data: dict) -> Tuple[str, float]:
-    transactions = data['transactions_df']
     balance = data['profile']['avg_monthly_balance_KZT']
+    if balance < 500_000:
+        return "Премиальная карта", 0.0
+    transactions = data['transactions_df']
     if balance >= 6_000_000: base_rate = 0.04
     elif balance >= 1_000_000: base_rate = 0.03
     else: base_rate = 0.02
@@ -67,29 +80,30 @@ def score_fx_exchange(data: dict) -> Tuple[str, float]:
     benefit = fx_volume * FX_SAVING_RATE
     return "Обмен валют", round(benefit, 2)
 
+# ИЗМЕНЕНИЕ 1: Порог входа в инвестиции снижен для привлечения начинающих.
 def score_investments(data: dict) -> Tuple[str, float]:
     balance = data['profile']['avg_monthly_balance_KZT']
-    if balance < 500_000: return "Инвестиции", 0.0
+    if balance < 50_000: 
+        return "Инвестиции", 0.0
     investable_amount = balance * INVESTMENT_BALANCE_SHARE
-    quarterly_yield = INVESTMENT_ANNUAL_YIELD / 4
-    benefit = investable_amount * quarterly_yield
+    benefit = investable_amount * INVESTMENT_ANNUAL_YIELD
     return "Инвестиции", round(benefit, 2)
 
 def score_gold_bars(data: dict) -> Tuple[str, float]:
     balance = data['profile']['avg_monthly_balance_KZT']
     if balance < GOLD_BALANCE_THRESHOLD: return "Золотые слитки", 0.0
     investable_amount = balance * INVESTMENT_BALANCE_SHARE
-    quarterly_yield = GOLD_ANNUAL_YIELD / 4
-    benefit = investable_amount * quarterly_yield
+    benefit = investable_amount * GOLD_ANNUAL_YIELD
     return "Золотые слитки", round(benefit, 2)
 
+# ИЗМЕНЕНИЕ 2: Порог для сберегательного депозита повышен. Это продукт для состоятельных.
 def score_sber_deposit(data: dict) -> Tuple[str, float]:
     transfers = data['transfers_df']
     balance = data['profile']['avg_monthly_balance_KZT']
     deposit_activity = transfers[transfers['type'].str.contains('deposit', na=False)]
-    if deposit_activity.empty and balance > 300_000:
-        quarterly_benefit = (balance * 0.165) / 4
-        return "Депозит Сберегательный", round(quarterly_benefit, 2)
+    if deposit_activity.empty and balance > 1_000_000:
+        annual_benefit = balance * 0.165
+        return "Депозит Сберегательный", round(annual_benefit, 2)
     return "Депозит Сберегательный", 0.0
 
 def score_nakop_deposit(data: dict) -> Tuple[str, float]:
@@ -97,8 +111,8 @@ def score_nakop_deposit(data: dict) -> Tuple[str, float]:
     balance = data['profile']['avg_monthly_balance_KZT']
     topup_activity = transfers[transfers['type'] == 'deposit_topup_out']
     if not topup_activity.empty:
-        quarterly_benefit = (balance * 0.155) / 4
-        return "Депозит Накопительный", round(quarterly_benefit, 2)
+        annual_benefit = balance * 0.155
+        return "Депозит Накопительный", round(annual_benefit, 2)
     return "Депозит Накопительный", 0.0
 
 def score_multi_deposit(data: dict) -> Tuple[str, float]:
@@ -106,36 +120,52 @@ def score_multi_deposit(data: dict) -> Tuple[str, float]:
     balance = data['profile']['avg_monthly_balance_KZT']
     fx_activity = transfers[transfers['type'].isin(['deposit_fx_topup_out', 'deposit_fx_withdraw_in', 'fx_buy', 'fx_sell'])]
     if not fx_activity.empty:
-        quarterly_benefit = (balance * 0.145) / 4
-        return "Депозит Мультивалютный", round(quarterly_benefit, 2)
+        annual_benefit = balance * 0.145
+        return "Депозит Мультивалютный", round(annual_benefit, 2)
     return "Депозит Мультивалютный", 0.0
 
 def score_cash_loan(data: dict) -> Tuple[str, float]:
+    transfers = data['transfers_df']
+    if transfers.empty:
+        return "Кредит наличными", 0.0
+    total_salary = transfers[transfers['type'] == 'salary_in']['amount'].sum()
+    if total_salary == 0:
+        return "Кредит наличными", 0.0
+    loan_payments = transfers[transfers['type'] == 'loan_payment_out']['amount'].sum()
+    p2p_payments = transfers[transfers['type'] == 'p2p_out']['amount'].sum()
+    utilities_payments = transfers[transfers['type'] == 'utilities_out']['amount'].sum()
+    total_committed_spending = loan_payments + p2p_payments + utilities_payments
+    spending_to_income_ratio = total_committed_spending / total_salary
+    if spending_to_income_ratio > 0.65:
+        return "Кредит наличными", 1.0
+    total_transactions_spending = data['metrics']['total_spending_3m']
+    if (total_transactions_spending + total_committed_spending) > total_salary:
+        return "Кредит наличными", 1.0
     return "Кредит наличными", 0.0
 
-# --- Новый модуль: Диагностика профиля клиента ---
+# ИЗМЕНЕНИЕ 3: Введена новая, более точная сегментация клиентов.
 def _get_client_profile_type(data: dict) -> List[str]:
     profile_tags = []
     balance = data['profile']['avg_monthly_balance_KZT']
     total_spending = data['metrics']['total_spending_3m']
     
-    # Определение "Накопителя"
+    if balance >= 1_000_000:
+        profile_tags.append("INVESTOR")
+    elif 50_000 <= balance < 1_000_000: # Новый сегмент
+        profile_tags.append("NOVICE_INVESTOR")
+
     if balance > 200_000 and balance > total_spending:
         profile_tags.append("SAVER")
-        
-    # Определение "Транжиры"
     if total_spending > 500_000 and total_spending > balance * 2:
         profile_tags.append("SPENDER")
         
-    # Определение "Путешественника"
     transactions = data['transactions_df']
     travel_spending = transactions[transactions['category'].isin(['Путешествия', 'Такси', 'Отели'])]['amount'].sum()
-    if travel_spending > total_spending * 0.1: # Если траты на путешествия > 10% от всех трат
+    if total_spending > 0 and travel_spending / total_spending > 0.1:
         profile_tags.append("TRAVELER")
         
-    return profile_tags
+    return list(set(profile_tags)) # Убираем возможные дубли
 
-# --- Финальная версия главной функции-оркестратора ---
 def rank_top_products(full_data: dict) -> list[tuple[str, float]]:
     if not full_data: return []
 
@@ -146,22 +176,17 @@ def rank_top_products(full_data: dict) -> list[tuple[str, float]]:
         score_cash_loan,
     ]
     
-    # 1. Расчет честной, базовой выгоды (Уровень Техники)
     base_results = {product: benefit for product, benefit in [scorer(full_data) for scorer in scorers]}
-    
-    # 2. Определение профиля клиента (Уровень Стратегии)
     client_profile_tags = _get_client_profile_type(full_data)
     
-    # 3. Применение стратегических коэффициентов
     strategic_results = []
     for product, benefit in base_results.items():
         new_benefit = benefit
         for tag in client_profile_tags:
-            if product in STRATEGIC_COEFFICIENTS[tag]["products"]:
+            if tag in STRATEGIC_COEFFICIENTS and product in STRATEGIC_COEFFICIENTS[tag]["products"]:
                 new_benefit *= STRATEGIC_COEFFICIENTS[tag]["multiplier"]
         strategic_results.append((product, new_benefit))
 
-    # 4. Ранжирование, сравнение с текущей картой и выбор лучших
     strategic_results.sort(key=lambda x: x[1], reverse=True)
 
     transactions = full_data['transactions_df']
@@ -169,29 +194,18 @@ def rank_top_products(full_data: dict) -> list[tuple[str, float]]:
     if not transactions.empty:
         current_cards = transactions['product'].unique().tolist()
 
-    current_card_benefit = 0
-    current_card_name = None
-    # Важно: выгоду текущей карты берем из честных, базовых расчетов
-    for card_name in current_cards:
-        if card_name in base_results:
-            current_card_benefit = base_results[card_name]
-            current_card_name = card_name
-            break
+    final_recommendations = [res for res in strategic_results if res[0] not in current_cards and res[1] > 0]
     
-    best_new_product_benefit = 0
-    # Лучший новый продукт ищем уже в стратегическом рейтинге
-    for product, benefit in strategic_results:
-        if product not in current_cards and benefit > 0:
-            best_new_product_benefit = benefit
-            break
+    if len(final_recommendations) < 4:
+        fallback_products = [
+            "Депозит Сберегательный", "Инвестиции", "Премиальная карта",
+            "Кредитная карта", "Депозит Накопительный"
+        ]
+        recommended_product_names = [rec[0] for rec in final_recommendations]
+        for product in fallback_products:
+            if len(final_recommendations) >= 4:
+                break
+            if product not in recommended_product_names and product not in current_cards:
+                final_recommendations.append((product, 0.0))
 
-    final_recommendations = []
-    # Сравниваем честную выгоду текущей карты со стратегической выгодой новой
-    if current_card_benefit >= best_new_product_benefit and current_card_name is not None:
-        final_recommendations.append(("Подтверждение выгоды", current_card_benefit, current_card_name))
-        other_new_products = [res for res in strategic_results if res[0] not in current_cards and res[1] > 0]
-        final_recommendations.extend(other_new_products)
-    else:
-        final_recommendations = [res for res in strategic_results if res[0] not in current_cards and res[1] > 0]
-        
-    return [(res[0], res[1]) for res in final_recommendations[:4]]
+    return final_recommendations[:4]
