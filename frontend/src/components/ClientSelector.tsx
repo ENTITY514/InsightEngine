@@ -19,8 +19,8 @@ const ClientSelector: React.FC<{
           Клиенты
         </h2>
         <div className="space-y-3">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-16 bg-gray-700/50 rounded-xl animate-pulse"></div>
+          {[...Array(10)].map((_, i) => (
+            <div key={i} className="h-12 bg-gray-700/50 rounded-xl animate-pulse"></div>
           ))}
         </div>
       </div>
@@ -35,12 +35,12 @@ const ClientSelector: React.FC<{
         </div>
         Клиенты
       </h2>
-      <div className="space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
+      <div className="space-y-2 max-h-[600px] overflow-y-auto custom-scrollbar">
         {clients.map((client) => (
           <button
             key={client.client_code}
             onClick={() => onClientSelect(client.client_code)}
-            className={`w-full p-4 text-left rounded-xl transition-all duration-300 flex items-center justify-between group relative overflow-hidden ${
+            className={`w-full p-1 text-left rounded-xl transition-all duration-300 flex items-center justify-between group relative overflow-hidden ${
               selectedClientCode === client.client_code
                 ? 'bg-blue-500/20 border-2 border-blue-400/50 text-white shadow-lg shadow-blue-500/25'
                 : 'bg-gray-700/30 hover:bg-gray-600/40 border-2 border-transparent text-gray-300 hover:text-white hover:shadow-md'

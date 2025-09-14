@@ -6,6 +6,7 @@
 .custom-scrollbar {
     scrollbar-width: thin;
     scrollbar-color: #3B82F6 #374151;
+    padding-right: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -15,7 +16,6 @@
 .custom-scrollbar::-webkit-scrollbar-track {
     background: #374151;
     border-radius: 10px;
-    margin: 8px 0;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {

@@ -4,12 +4,21 @@ import { Client, ClientDashboardData, RecommendationResponse } from '../types/ty
 
 export const fetchClients = async (): Promise<Client[]> => {
   // Mock data - replace with actual API call
+  await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate loading
   return [
     { client_code: 1, name: 'Айгерим' },
     { client_code: 2, name: 'Данияр' },
     { client_code: 3, name: 'Асель' },
     { client_code: 4, name: 'Арман' },
-    { client_code: 5, name: 'Молдир' }
+    { client_code: 5, name: 'Молдир' },
+    { client_code: 6, name: 'Молдир' },
+    { client_code: 7, name: 'Молдир' },
+    { client_code: 8, name: 'Молдир' },
+    { client_code: 9, name: 'Молдир' },
+    { client_code: 10, name: 'Молдир' },
+    { client_code: 11, name: 'Молдир' },
+    { client_code: 12, name: 'Молдир' },
+    { client_code: 13, name: 'Иман' },
   ];
 };
 
