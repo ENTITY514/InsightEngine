@@ -87,7 +87,6 @@ def get_full_client_data(client_code: int) -> Optional[Dict]:
         total_spending = 0
         top_categories = []
 
-    # Формирование ответа. Чисто и прямолинейно.
     profile_data = client_info
     profile_data['client_code'] = client_code
 
@@ -107,10 +106,8 @@ def get_all_clients() -> List[Dict]:
     if _clients_df is None:
         _load_data()
     
-    # Возвращаем пустой список, если данные так и не загрузились.
     if _clients_df is None:
         return []
 
-    # reset_index() возвращает client_code из индекса в колонку.
     clients_list = _clients_df.reset_index()[['client_code', 'name']].to_dict('records')
     return clients_list

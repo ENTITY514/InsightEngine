@@ -1,21 +1,12 @@
 import pandas as pd
 from typing import Tuple
 
-# ===================================================================
-# КОНСТАНТЫ ДЛЯ РАСЧЕТОВ (Признак дисциплины, а не произвольных чисел)
-# ===================================================================
+FX_SAVING_RATE = 0.01  
 
-# Предполагаемая экономия на комиссии при обмене валют (в %)
-FX_SAVING_RATE = 0.01  # Экономия 1% от объема за счет выгодного курса
+INVESTMENT_ANNUAL_YIELD = 0.15 
+INVESTMENT_BALANCE_SHARE = 0.20 
 
-# Консервативная годовая доходность для начинающих инвесторов (в %)
-INVESTMENT_ANNUAL_YIELD = 0.15  # 15% годовых
-# Доля от свободных средств, которую можно направить на инвестиции
-INVESTMENT_BALANCE_SHARE = 0.20 # 20%
-
-# Предполагаемая годовая доходность от вложений в золото
-GOLD_ANNUAL_YIELD = 0.10 # 10% годовых
-# Порог баланса для рассмотрения вложений в золото
+GOLD_ANNUAL_YIELD = 0.10 
 GOLD_BALANCE_THRESHOLD = 7_000_000
 
 
@@ -48,18 +39,28 @@ def score_premium_card(data: dict) -> Tuple[str, float]:
     return "Премиальная карта", round(total_benefit, 2)
 
 def score_credit_card(data: dict) -> Tuple[str, float]:
-    """Выгода = Кешбэк 10% на топ-3 категории и онлайн-сервисы."""
+    """
+    Выгода = Кешбэк 10% на топ-3 категории расходов И на онлайн-услуги.
+    Расчет исключает двойное начисление и ограничен лимитом.
+    """
     transactions = data['transactions_df']
     
-    top_categories_spending = sum(cat['amount'] for cat in data['metrics']['top_categories'])
-    benefit_from_top_cat = top_categories_spending * 0.10
+    if transactions.empty:
+        return "Кредитная карта", 0.0
 
-    # Используем точные категории из ТЗ, где это возможно
-    online_categories = ['Играем дома', 'Кино', 'Едим дома'] # "Едим дома" как прокси для "доставки"
-    online_spending = transactions[transactions['category'].isin(online_categories)]['amount'].sum()
-    benefit_from_online = online_spending * 0.10
+    top_categories_series = transactions.groupby('category')['amount'].sum().nlargest(3)
+    top_categories_list = top_categories_series.index.tolist()
+
+    online_categories_list = ['Играем дома', 'Кино', 'Едим дома']
+
+    all_promo_categories = set(top_categories_list + online_categories_list)
+
+    promo_spending_mask = transactions['category'].isin(all_promo_categories)
+    total_promo_spending = transactions.loc[promo_spending_mask, 'amount'].sum()
+
+    total_benefit = total_promo_spending * 0.10
     
-    return "Кредитная карта", round(benefit_from_top_cat + benefit_from_online, 2)
+    return "Кредитная карта", round(total_benefit, 2)
 
 def score_fx_exchange(data: dict) -> Tuple[str, float]:
     """Выгода = Предполагаемая экономия на комиссии от объема обмена."""
@@ -146,10 +147,13 @@ def score_cash_loan(data: dict) -> Tuple[str, float]:
 # Главная функция-оркестратор
 # ===================================================================
 
-def find_best_product(client_code: int, full_data: dict) -> Tuple[str, float]:
-    """Прогоняет данные через все оценщики и возвращает лучший продукт."""
+def rank_top_products(full_data: dict) -> list[tuple[str, float]]:
+    """
+    Прогоняет данные через все оценщики и возвращает
+    ранжированный список из топ-4 продуктов и их выгод.
+    """
     if not full_data:
-        return None, None
+        return []
         
     scorers = [
         score_travel_card,
@@ -161,19 +165,18 @@ def find_best_product(client_code: int, full_data: dict) -> Tuple[str, float]:
         score_sber_deposit,
         score_nakop_deposit,
         score_multi_deposit,
-        score_cash_loan, # Всегда будет в конце, так как выгода 0
+        score_cash_loan,
     ]
     
     results = []
     for scorer in scorers:
         results.append(scorer(full_data))
         
-    # Сортировка по единой, абсолютной выгоде в KZT. Теперь она имеет смысл.
+    # Сортировка по выгоде
     results.sort(key=lambda x: x[1], reverse=True)
     
-    # Отсекаем продукты без явной выгоды
-    if results[0][1] <= 0.0:
-        return "Подходящих продуктов не найдено", 0.0
+    # Отфильтровываем продукты с нулевой или отрицательной выгодой
+    positive_results = [res for res in results if res[1] > 0]
     
-    best_product, best_benefit = results[0]
-    return best_product, best_benefit
+    # Возвращаем до 4 лучших результатов
+    return positive_results[:4]

@@ -1,6 +1,17 @@
 from pydantic import BaseModel
 from typing import List, Literal
 
+class RecommendationItem(BaseModel):
+    product: str
+    push_notification: str
+
+class RecommendationResponse(BaseModel):
+    recommendations: List[RecommendationItem]
+
+class ClientInfo(BaseModel):
+    client_code: int
+    name: str
+
 class TopCategory(BaseModel):
     category: str
     amount: float
@@ -17,11 +28,3 @@ class ClientDashboardData(BaseModel):
 
 class RecommendationRequest(BaseModel):
     client_code: int
-
-class RecommendationResponse(BaseModel):
-    product: str
-    push_notification: str
-
-class ClientInfo(BaseModel):
-    client_code: int
-    name: str
