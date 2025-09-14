@@ -1,78 +1,88 @@
-import { Client, ClientDashboardData, RecommendationResponse } from '../types/types';
+import type { Client, ClientDashboardData, RecommendationResponse } from "../types/types"
 
-// const API_BASE = 'http://127.0.0.1:8000/api';
-
+// Mock API functions - replace with actual API calls
 export const fetchClients = async (): Promise<Client[]> => {
-  // Mock data - replace with actual API call
-  await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate loading
+  // Simulate API delay
+  await new Promise((resolve) => setTimeout(resolve, 1000))
+
   return [
-    { client_code: 1, name: 'Айгерим' },
-    { client_code: 2, name: 'Данияр' },
-    { client_code: 3, name: 'Асель' },
-    { client_code: 4, name: 'Арман' },
-    { client_code: 5, name: 'Молдир' },
-    { client_code: 6, name: 'Молдир' },
-    { client_code: 7, name: 'Молдир' },
-    { client_code: 8, name: 'Молдир' },
-    { client_code: 9, name: 'Молдир' },
-    { client_code: 10, name: 'Молдир' },
-    { client_code: 11, name: 'Молдир' },
-    { client_code: 12, name: 'Молдир' },
-    { client_code: 13, name: 'Иман' },
-  ];
-};
+    { client_code: 1, name: "Алексей" },
+    { client_code: 2, name: "Мария" },
+    { client_code: 3, name: "Дмитрий" },
+    { client_code: 4, name: "Елена" },
+    { client_code: 5, name: "Андрей" },
+    { client_code: 6, name: "Ольга" },
+    { client_code: 7, name: "Сергей" },
+    { client_code: 8, name: "Татьяна" },  
+    { client_code: 9, name: "Игорь" },
+    { client_code: 10, name: "Наталья" },
+    { client_code: 11, name: "Виктор" },
+  ]
+}
 
 export const fetchClientData = async (clientCode: number): Promise<ClientDashboardData> => {
-  // Mock data - replace with actual API call
-  await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate loading
-  
-  if (clientCode === 1) {
-    return {
+  // Simulate API delay
+  await new Promise((resolve) => setTimeout(resolve, 800))
+
+  const mockData: Record<number, ClientDashboardData> = {
+    1: {
       client_code: 1,
-      name: 'Айгерим',
-      status: 'Зарплатный клиент',
-      age: 28,
-      city: 'Алматы',
-      avg_monthly_balance_KZT: 250000.00,
-      total_spending_3m: 750000.00,
+      name: "Алексей Иванов",
+      status: "Студент",
+      age: 35,
+      city: "Алматы",
+      avg_monthly_balance_KZT: 2500000,
+      total_spending_3m: 1800000,
       top_categories: [
-        { category: 'Такси', amount: 85000.00 },
-        { category: 'Кафе и рестораны', amount: 65000.00 },
-        { category: 'Продукты питания', amount: 50000.00 }
-      ]
-    };
+        { category: "Продукты питания", amount: 450000 },
+        { category: "Транспорт", amount: 320000 },
+        { category: "Развлечения", amount: 280000 },
+      ],
+    },
+    2: {
+      client_code: 2,
+      name: "Мария Петрова",
+      status: "Зарплатный клиент",
+      age: 42,
+      city: "Нур-Султан",
+      avg_monthly_balance_KZT: 5200000,
+      total_spending_3m: 3100000,
+      top_categories: [
+        { category: "Шоппинг", amount: 850000 },
+        { category: "Рестораны", amount: 620000 },
+        { category: "Путешествия", amount: 580000 },
+      ],
+    },
   }
-  
-  // Mock data for other clients
-  return {
-    client_code: clientCode,
-    name: clientCode === 2 ? 'Данияр' : clientCode === 3 ? 'Асель' : clientCode === 4 ? 'Арман' : 'Молдир',
-    status: 'Обычный клиент',
-    age: 25 + clientCode,
-    city: 'Нур-Султан',
-    avg_monthly_balance_KZT: 150000.00 + clientCode * 10000,
-    total_spending_3m: 450000.00 + clientCode * 50000,
-    top_categories: [
-      { category: 'Продукты питания', amount: 45000.00 + clientCode * 5000 },
-      { category: 'Транспорт', amount: 35000.00 + clientCode * 3000 },
-      { category: 'Развлечения', amount: 25000.00 + clientCode * 2000 }
-    ]
-  };
-};
+
+  return mockData[clientCode] || mockData[1]
+}
 
 export const generateRecommendation = async (clientCode: number): Promise<RecommendationResponse> => {
-  // Mock data - replace with actual API call
-  await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate processing
-  
-  if (clientCode === 1) {
-    return {
-      product: 'Карта для путешествий',
-      push_notification: 'Айгерим, в августе вы сделали 15 поездок на такси на 85 000 ₸. С картой для путешествий вернули бы ≈3 400 ₸. Откройте карту в приложении. 🚀'
-    };
-  }
-  
+  // Simulate API delay
+  await new Promise((resolve) => setTimeout(resolve, 2000))
+
+  const allRecommendations = [
+    {
+      product: "Премиум Карта",
+      push_notification: "Получите 5% кэшбэк на все покупки и эксклюзивные привилегии с нашей Премиум картой!",
+    },
+    {
+      product: "Инвестиционный Портфель",
+      push_notification: "Увеличьте свои сбережения на 12% годовых с персональным инвестиционным портфелем",
+    },
+    {
+      product: "Автокредит",
+      push_notification: "Специальное предложение: автокредит под 8.5% годовых с быстрым одобрением за 30 минут",
+    },
+    {
+      product: "Накопительная Карта",
+      push_notification:
+        "Вы потратили значительную сумму в прошлом месяце. С накопительной картой вы могли бы получить дополнительные бонусы! 💳",
+    },
+  ]
+
   return {
-    product: 'Накопительная карта',
-    push_notification: `Вы потратили значительную сумму в прошлом месяце. С накопительной картой вы могли бы получить дополнительные бонусы! 💳`
-  };
-};
+    recommendations: allRecommendations,
+  }
+}

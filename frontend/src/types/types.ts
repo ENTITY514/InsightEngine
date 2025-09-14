@@ -20,6 +20,8 @@ export interface ClientDashboardData {
 }
 
 export interface RecommendationResponse {
-  product: string;
-  push_notification: string;
+  recommendations: {
+    product: string
+    push_notification: string
+  }[]
 }
