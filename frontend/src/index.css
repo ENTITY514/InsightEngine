@@ -1,3 +1,36 @@
 @import "tailwindcss/base";
 @import "tailwindcss/components";
 @import "tailwindcss/utilities";
+
+/* Кастомный скроллбар для списка клиентов */
+.custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #3B82F6 #374151;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: #374151;
+    border-radius: 10px;
+    margin: 8px 0;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #3B82F6, #2563EB);
+    border-radius: 10px;
+    border: 1px solid #1F2937;
+    transition: all 0.3s ease;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #2563EB, #1D4ED8);
+    transform: scale(1.1);
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:active {
+    background: linear-gradient(135deg, #1D4ED8, #1E40AF);
+}
