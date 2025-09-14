@@ -2,21 +2,25 @@ import pandas as pd
 import glob
 import os
 
+# Определяем путь к папке с данными относительно текущего файла
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH = os.path.join(BASE_DIR, 'data')
 
+# Кэшируем данные, чтобы не читать файлы с диска при каждом запросе
 _clients_df = None
 _transactions_df = None
 _transfers_df = None
 
 def _load_data():
+    """Загружает все данные из CSV в DataFrame'ы Pandas."""
     global _clients_df, _transactions_df, _transfers_df
+
     clients_file_path = os.path.join(DATA_PATH, 'clients.csv')
     try:
         _clients_df = pd.read_csv(clients_file_path)
         _clients_df.set_index('client_code', inplace=True)
     except FileNotFoundError:
-        print(f"Критическая ошибка: файл {clients_file_path} не найден!")
+        print(f"КРИТИЧЕСКАЯ ОШИБКА: Файл {clients_file_path} не найден!")
         return
 
     transaction_files = glob.glob(os.path.join(DATA_PATH, 'client_*_transactions_3m.csv'))
@@ -31,14 +35,8 @@ def _load_data():
     else:
         _transfers_df = pd.DataFrame()
 
-# ===================================================================
-# ИЗМЕНЕНИЕ: Теперь функция возвращает и сырые данные для анализа
-# ===================================================================
 def get_full_client_data(client_code: int) -> dict:
-    """
-    Собирает и возвращает полный профиль клиента, включая
-    DataFrame'ы с его транзакциями и переводами.
-    """
+    """Собирает полный профиль клиента, включая DataFrame'ы с транзакциями."""
     if _clients_df is None:
         _load_data()
         if _clients_df is None:
@@ -62,7 +60,6 @@ def get_full_client_data(client_code: int) -> dict:
             for index, value in top_categories_series.items()
         ]
 
-    # Собираем всё в единый словарь
     full_data = {
         "profile": {
             "client_code": client_code,
@@ -76,8 +73,18 @@ def get_full_client_data(client_code: int) -> dict:
             "total_spending_3m": round(total_spending, 2),
             "top_categories": top_categories
         },
-        # Добавляем сами данные для глубокого анализа
         "transactions_df": client_transactions,
         "transfers_df": client_transfers
     }
     return full_data
+
+def get_all_clients() -> list:
+    """Возвращает краткий список всех клиентов (код и имя)."""
+    # Этот блок кода должен иметь отступ
+    if _clients_df is None:
+        _load_data()
+        if _clients_df is None:
+             return []
+
+    clients_list = _clients_df.reset_index()[['client_code', 'name']].to_dict('records')
+    return clients_list
