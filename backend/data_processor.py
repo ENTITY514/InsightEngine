@@ -2,6 +2,57 @@ import pandas as pd
 import glob
 import os
 from typing import List, Dict, Optional
+import locale
+
+def get_client_details(client_code: int) -> Optional[Dict]:
+    """
+    Возвращает детальную разбивку транзакций и переводов по месяцам.
+    """
+    # Устанавливаем русскую локаль для названий месяцев
+    try:
+        locale.setlocale(locale.LC_ALL, 'ru_RU.UTF-8')
+    except locale.Error:
+        # В некоторых системах может понадобиться 'Russian_Russia.1251'
+        try:
+            locale.setlocale(locale.LC_ALL, 'Russian_Russia.1251')
+        except locale.Error:
+            print("Не удалось установить русскую локаль для названий месяцев.")
+
+    # Получаем все данные клиента
+    full_data = get_full_client_data(client_code)
+    if not full_data:
+        return None
+
+    # --- Обработка транзакций ---
+    transactions_df = full_data['transactions_df']
+    monthly_transactions = {}
+    if not transactions_df.empty:
+        # Создаем колонку с названием месяца
+        transactions_df['month'] = transactions_df['date'].dt.strftime('%B').str.capitalize()
+        # Группируем по месяцу и категории, считаем сумму
+        grouped_trans = transactions_df.groupby(['month', 'category'])['amount'].sum().round(2)
+        # Преобразуем в нужный вложенный словарь
+        for (month, category), amount in grouped_trans.items():
+            if month not in monthly_transactions:
+                monthly_transactions[month] = {}
+            monthly_transactions[month][category] = amount
+            
+    # --- Обработка переводов ---
+    transfers_df = full_data['transfers_df']
+    monthly_transfers = {}
+    if not transfers_df.empty:
+        transfers_df['month'] = transfers_df['date'].dt.strftime('%B').str.capitalize()
+        # Группируем по месяцу и типу перевода
+        grouped_transf = transfers_df.groupby(['month', 'type'])['amount'].sum().round(2)
+        for (month, type), amount in grouped_transf.items():
+            if month not in monthly_transfers:
+                monthly_transfers[month] = {}
+            monthly_transfers[month][type] = amount
+            
+    return {
+        "monthly_transactions": monthly_transactions,
+        "monthly_transfers": monthly_transfers
+    }
 
 # Определяем путь к папке с данными относительно текущего файла
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

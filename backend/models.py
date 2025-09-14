@@ -1,5 +1,9 @@
 from pydantic import BaseModel
-from typing import List, Literal
+from typing import List, Literal, Dict
+
+class ClientDetailsResponse(BaseModel):
+    monthly_transactions: Dict[str, Dict[str, float]]
+    monthly_transfers: Dict[str, Dict[str, float]]
 
 class RecommendationItem(BaseModel):
     product: str

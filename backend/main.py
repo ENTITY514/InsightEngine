@@ -11,6 +11,10 @@ from models import (
     ClientInfo, RecommendationItem
 )
 
+
+from data_processor import get_client_details
+from models import ClientDetailsResponse
+
 app = FastAPI(title="InsightEngine API", version="1.0")
 app.add_middleware(
     CORSMiddleware,
@@ -19,6 +23,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/api/clients/{client_code}/details", response_model=ClientDetailsResponse)
+def get_client_details_endpoint(client_code: int):
+    """
+    Возвращает детализацию трат и переводов клиента по месяцам.
+    """
+    details = get_client_details(client_code)
+    if details:
+        return details
+    raise HTTPException(status_code=404, detail=f"Client with code {client_code} not found")
+
 
 @app.get("/api/clients", response_model=List[ClientInfo])
 def get_clients_list():
