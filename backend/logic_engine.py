@@ -1,32 +1,26 @@
 import pandas as pd
-from typing import Tuple, List, Dict
+from typing import Tuple, List, Dict, Set
 
-# --- КОНСТАНТЫ РАСЧЕТОВ (Техническая дисциплина) ---
 FX_SAVING_RATE = 0.01
 INVESTMENT_ANNUAL_YIELD = 0.165 
 INVESTMENT_BALANCE_SHARE = 0.30 
 GOLD_ANNUAL_YIELD = 0.10
 GOLD_BALANCE_THRESHOLD = 7_000_000
+CAPITALIST_CLIENT_THRESHOLD = 1_000_000
+PREMIUM_CARD_MIN_BALANCE = 400_000
 
-# --- НОВЫЕ СТРАТЕГИЧЕСКИЕ ПАРАМЕТРЫ ---
-# Порог для определения состоятельного клиента
-WEALTHY_CLIENT_BALANCE_THRESHOLD = 3_000_000
-# Множитель для обеспечения доминирования приоритетных продуктов
-WEALTHY_CLIENT_MULTIPLIER = 100 
+BEHAVIORAL_BOOSTS = {
+    "HIGH_FX_ACTIVITY": {"Депозит Мультивалютный": 3.0},
+    "HAS_INVESTMENTS": {"Инвестиции": 5.0},
+    "HIGH_P2P_OUTFLOW": {"Премиальная карта": 1.5},
+    "HAS_LOAN_PAYMENTS": {"Кредитная карта": 1.5}
+}
 
-
-# --- Функции-оценщики (score_*) остаются БЕЗ ИЗМЕНЕНИЙ ---
-# ... (здесь находятся все функции score_* от score_travel_card до score_cash_loan) ...
-def score_travel_card(data: dict) -> Tuple[str, float]:
-    transactions = data['transactions_df']
-    travel_categories = ['Путешествия', 'Такси', 'Отели']
-    travel_spending = transactions[transactions['category'].isin(travel_categories)]['amount'].sum()
-    benefit = travel_spending * 0.04
-    return "Карта для путешествий", round(benefit, 2)
 
 def score_premium_card(data: dict) -> Tuple[str, float]:
+    """Внедрен новый порог отсечения."""
     balance = data['profile']['avg_monthly_balance_KZT']
-    if balance < 500_000:
+    if balance < PREMIUM_CARD_MIN_BALANCE:
         return "Премиальная карта", 0.0
     transactions = data['transactions_df']
     if balance >= 6_000_000: base_rate = 0.04
@@ -39,6 +33,13 @@ def score_premium_card(data: dict) -> Tuple[str, float]:
     premium_benefit = transactions.loc[premium_mask, 'amount'].sum() * 0.04
     total_benefit = min(non_premium_benefit + premium_benefit, 300_000)
     return "Премиальная карта", round(total_benefit, 2)
+
+def score_travel_card(data: dict) -> Tuple[str, float]:
+    transactions = data['transactions_df']
+    travel_categories = ['Путешествия', 'Такси', 'Отели']
+    travel_spending = transactions[transactions['category'].isin(travel_categories)]['amount'].sum()
+    benefit = travel_spending * 0.04
+    return "Карта для путешествий", round(benefit, 2)
 
 def score_credit_card(data: dict) -> Tuple[str, float]:
     transactions = data['transactions_df']
@@ -89,7 +90,7 @@ def score_nakop_deposit(data: dict) -> Tuple[str, float]:
     transfers = data['transfers_df']
     balance = data['profile']['avg_monthly_balance_KZT']
     topup_activity = transfers[transfers['type'] == 'deposit_topup_out']
-    if not topup_activity.empty:
+    if not topup_activity.empty or balance > CAPITALIST_CLIENT_THRESHOLD:
         annual_benefit = balance * 0.155
         return "Депозит Накопительный", round(annual_benefit, 2)
     return "Депозит Накопительный", 0.0
@@ -98,7 +99,7 @@ def score_multi_deposit(data: dict) -> Tuple[str, float]:
     transfers = data['transfers_df']
     balance = data['profile']['avg_monthly_balance_KZT']
     fx_activity = transfers[transfers['type'].isin(['deposit_fx_topup_out', 'deposit_fx_withdraw_in', 'fx_buy', 'fx_sell'])]
-    if not fx_activity.empty:
+    if not fx_activity.empty or balance > CAPITALIST_CLIENT_THRESHOLD:
         annual_benefit = balance * 0.145
         return "Депозит Мультивалютный", round(annual_benefit, 2)
     return "Депозит Мультивалютный", 0.0
@@ -122,8 +123,30 @@ def score_cash_loan(data: dict) -> Tuple[str, float]:
         return "Кредит наличными", 1.0
     return "Кредит наличными", 0.0
 
+def _get_behavioral_tags(transfers_df: pd.DataFrame) -> Set[str]:
+    """Анализирует историю переводов и возвращает набор поведенческих тегов."""
+    tags = set()
+    if transfers_df.empty:
+        return tags
 
-# --- Модуль расчета излишка (без изменений) ---
+    fx_operations_count = transfers_df[transfers_df['type'].isin(['fx_buy', 'fx_sell'])].shape[0]
+    if fx_operations_count > 2: 
+        tags.add("HIGH_FX_ACTIVITY")
+        
+    investment_ops_count = transfers_df[transfers_df['type'].str.contains('invest', na=False)].shape[0]
+    if investment_ops_count > 0:
+        tags.add("HAS_INVESTMENTS")
+        
+    p2p_outflow_sum = transfers_df[transfers_df['type'] == 'p2p_out']['amount'].sum()
+    if p2p_outflow_sum > 200000: 
+        tags.add("HIGH_P2P_OUTFLOW")
+
+    loan_payments_count = transfers_df[transfers_df['type'] == 'loan_payment_out'].shape[0]
+    if loan_payments_count > 0:
+        tags.add("HAS_LOAN_PAYMENTS")
+        
+    return tags
+
 def _calculate_monthly_surplus(data: Dict[str, pd.DataFrame]) -> float:
     transfers = data['transfers_df']
     total_inflow_transfers = transfers[transfers['type'].str.endswith('_in')]['amount'].sum()
@@ -133,62 +156,52 @@ def _calculate_monthly_surplus(data: Dict[str, pd.DataFrame]) -> float:
     surplus_3m = total_inflow_transfers - total_outflow
     return surplus_3m / 3
 
-# --- УСОВЕРШЕНСТВОВАННАЯ ГЛАВНАЯ ФУНКЦИЯ-ОРКЕСТРАТОР ---
 def rank_top_products(full_data: dict) -> list[tuple[str, float]]:
     if not full_data: return []
 
-    # --- ПРОТОКОЛ ПРИОРИТЕТА: ЭТАП 1 - ИДЕНТИФИКАЦИЯ ---
     balance = full_data['profile']['avg_monthly_balance_KZT']
-    is_wealthy_client = balance > WEALTHY_CLIENT_BALANCE_THRESHOLD
-    priority_products = ["Депозит Сберегательный", "Золотые слитки", "Депозит Мультивалютный"]
-
-    # === ВРАТА 1: ОПРЕДЕЛЕНИЕ ИСТИНЫ ===
-    monthly_surplus = _calculate_monthly_surplus(full_data)
     
-    # === ВРАТА 2: ОТСЕЧЕНИЕ ЛИШНЕГО ===
-    segment_whitelist = []
-    if monthly_surplus < 100000:
-        segment_whitelist = ["Кредитная карта", "Карта для путешествий", "Премиальная карта", "Кредит наличными"]
-    elif 100000 <= monthly_surplus < 1000000:
-        segment_whitelist = ["Инвестиции", "Депозит Накопительный"]
-    else: # >= 1000000
-        segment_whitelist = ["Инвестиции", "Золотые слитки", "Депозит Мультивалютный", "Депозит Сберегательный"]
-
-    # --- ПРОТОКОЛ ПРИОРИТЕТА: ЭТАП 2 - ГАРАНТИЯ РАССМОТРЕНИЯ ---
-    if is_wealthy_client:
-        for p in priority_products:
-            if p not in segment_whitelist:
-                segment_whitelist.append(p)
-
-    # === ВРАТА 3: ВОЗВЫШЕНИЕ СИЛЬНЕЙШЕГО ===
     scorers = [
         score_travel_card, score_premium_card, score_credit_card,
         score_fx_exchange, score_investments, score_gold_bars,
         score_sber_deposit, score_nakop_deposit, score_multi_deposit,
         score_cash_loan,
     ]
-    
-    all_results = {product: benefit for product, benefit in [scorer(full_data) for scorer in scorers]}
-    
-    # --- ПРОТОКОЛ ПРИОРИТЕТА: ЭТАП 3 - ДОМИНИРОВАНИЕ В РЕЙТИНГЕ ---
-    if is_wealthy_client:
-        for product_name in priority_products:
-            if product_name in all_results:
-                all_results[product_name] *= WEALTHY_CLIENT_MULTIPLIER
+    all_results = {p: b for p, b in [scorer(full_data) for scorer in scorers]}
 
-    # Применяем фильтр "белого списка"
-    surviving_products_list = [(p, b) for p, b in all_results.items() if p in segment_whitelist and b > 0]
+    behavioral_tags = _get_behavioral_tags(full_data['transfers_df'])
     
-    # Ранжируем выживших
-    surviving_products_list.sort(key=lambda x: x[1], reverse=True)
+    for tag in behavioral_tags:
+        if tag in BEHAVIORAL_BOOSTS:
+            for product, multiplier in BEHAVIORAL_BOOSTS[tag].items():
+                if product in all_results:
+                    all_results[product] *= multiplier
     
-    # Гарантируем наличие 4 рекомендаций
-    if len(surviving_products_list) < 4:
-        recommended_names = [p[0] for p in surviving_products_list]
-        for product_name in segment_whitelist:
-            if len(surviving_products_list) >= 4:
-                break
-            if product_name not in recommended_names:
-                surviving_products_list.append((product_name, 0.0))
+    if balance > CAPITALIST_CLIENT_THRESHOLD:
+        guaranteed_products = ["Депозит Сберегательный", "Депозит Накопительный", "Депозит Мультивалютный"]
+        final_recommendations = [(p, all_results.get(p, 0.0)) for p in guaranteed_products]
+        remaining_products = sorted([(p, b) for p, b in all_results.items() if p not in guaranteed_products], key=lambda x: x[1], reverse=True)
+        if remaining_products:
+            final_recommendations.append(remaining_products[0])
+        return final_recommendations[:4]
+    else:
+        monthly_surplus = _calculate_monthly_surplus(full_data)
+        segment_whitelist = []
+        if monthly_surplus < 100000:
+            segment_whitelist = ["Кредитная карта", "Карта для путешествий", "Премиальная карта", "Кредит наличными"]
+        elif 100000 <= monthly_surplus < 1000000:
+            segment_whitelist = ["Инвестиции", "Депозит Накопительный"]
+        else:
+            segment_whitelist = ["Инвестиции", "Золотые слитки", "Депозит Мультивалютный", "Депозит Сберегательный"]
 
-    return surviving_products_list[:4]
+        surviving_products_list = [(p, b) for p, b in all_results.items() if p in segment_whitelist and b > 0]
+        surviving_products_list.sort(key=lambda x: x[1], reverse=True)
+        
+        if len(surviving_products_list) < 4:
+            recommended_names = [p[0] for p in surviving_products_list]
+            for product_name in segment_whitelist:
+                if len(surviving_products_list) >= 4:
+                    break
+                if product_name not in recommended_names:
+                    surviving_products_list.append((product_name, 0.0))
+        return surviving_products_list[:4]

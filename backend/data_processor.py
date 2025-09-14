@@ -5,44 +5,32 @@ from typing import List, Dict, Optional
 import locale
 
 def get_client_details(client_code: int) -> Optional[Dict]:
-    """
-    Возвращает детальную разбивку транзакций и переводов по месяцам.
-    """
-    # Устанавливаем русскую локаль для названий месяцев
     try:
         locale.setlocale(locale.LC_ALL, 'ru_RU.UTF-8')
     except locale.Error:
-        # В некоторых системах может понадобиться 'Russian_Russia.1251'
         try:
             locale.setlocale(locale.LC_ALL, 'Russian_Russia.1251')
         except locale.Error:
             print("Не удалось установить русскую локаль для названий месяцев.")
 
-    # Получаем все данные клиента
     full_data = get_full_client_data(client_code)
     if not full_data:
         return None
 
-    # --- Обработка транзакций ---
     transactions_df = full_data['transactions_df']
     monthly_transactions = {}
     if not transactions_df.empty:
-        # Создаем колонку с названием месяца
         transactions_df['month'] = transactions_df['date'].dt.strftime('%B').str.capitalize()
-        # Группируем по месяцу и категории, считаем сумму
         grouped_trans = transactions_df.groupby(['month', 'category'])['amount'].sum().round(2)
-        # Преобразуем в нужный вложенный словарь
         for (month, category), amount in grouped_trans.items():
             if month not in monthly_transactions:
                 monthly_transactions[month] = {}
             monthly_transactions[month][category] = amount
             
-    # --- Обработка переводов ---
     transfers_df = full_data['transfers_df']
     monthly_transfers = {}
     if not transfers_df.empty:
         transfers_df['month'] = transfers_df['date'].dt.strftime('%B').str.capitalize()
-        # Группируем по месяцу и типу перевода
         grouped_transf = transfers_df.groupby(['month', 'type'])['amount'].sum().round(2)
         for (month, type), amount in grouped_transf.items():
             if month not in monthly_transfers:
@@ -54,11 +42,9 @@ def get_client_details(client_code: int) -> Optional[Dict]:
         "monthly_transfers": monthly_transfers
     }
 
-# Определяем путь к папке с данными относительно текущего файла
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH = os.path.join(BASE_DIR, 'data') 
 
-# Кэшируем данные, чтобы не читать файлы с диска при каждом запросе
 _clients_df: Optional[pd.DataFrame] = None
 _transactions_df: Optional[pd.DataFrame] = None
 _transfers_df: Optional[pd.DataFrame] = None
@@ -85,11 +71,8 @@ def _load_data():
         )
         _clients_df.set_index('client_code', inplace=True)
     except FileNotFoundError:
-        # Критическая ошибка должна останавливать процесс, а не просто печатать в консоль.
-        # В реальной системе здесь был бы вызов логгера.
         raise RuntimeError(f"Критическая ошибка: Основной файл данных '{clients_file_path}' не найден.")
 
-    # Загрузка транзакций с типизацией
     transaction_files = glob.glob(os.path.join(DATA_PATH, 'client_*_transactions_3m.csv'))
     if transaction_files:
         _transactions_df = pd.concat((
@@ -99,7 +82,6 @@ def _load_data():
     else:
         _transactions_df = pd.DataFrame()
 
-    # Загрузка переводов с типизацией
     transfer_files = glob.glob(os.path.join(DATA_PATH, 'client_*_transfers_3m.csv'))
     if transfer_files:
         _transfers_df = pd.concat((
@@ -110,23 +92,17 @@ def _load_data():
         _transfers_df = pd.DataFrame()
 
 def get_full_client_data(client_code: int) -> Optional[Dict]:
-    """
-    Собирает полный, типизированный и проверенный профиль клиента.
-    Каждый шаг выверен. Ничего лишнего.
-    """
     if _clients_df is None:
         _load_data()
 
     try:
-        # .loc вернет Series, который мы преобразуем в словарь.
         client_info = _clients_df.loc[client_code].to_dict()
     except KeyError:
-        return None # Клиент не найден - это штатная ситуация.
+        return None 
 
     client_transactions = _transactions_df[_transactions_df['client_code'] == client_code]
     client_transfers = _transfers_df[_transfers_df['client_code'] == client_code]
 
-    # Расчет метрик. Эффективно и безопасно.
     if not client_transactions.empty:
         total_spending = client_transactions['amount'].sum()
         top_categories_series = client_transactions.groupby('category')['amount'].sum().nlargest(3)
