@@ -1,5 +1,5 @@
 import pandas as pd
-from typing import Tuple, List
+from typing import Tuple, List, Dict
 
 # --- КОНСТАНТЫ РАСЧЕТОВ (Техническая дисциплина) ---
 FX_SAVING_RATE = 0.01
@@ -8,34 +8,15 @@ INVESTMENT_BALANCE_SHARE = 0.30
 GOLD_ANNUAL_YIELD = 0.10
 GOLD_BALANCE_THRESHOLD = 7_000_000
 
-# --- СТРАТЕГИЧЕСКИЕ КОЭФФИЦИЕНТЫ (Мудрость рекомендации) ---
-STRATEGIC_COEFFICIENTS = {
-    "SAVER": {
-        "products": ["Депозит Накопительный"], # Сберегательный теперь для инвесторов
-        "multiplier": 1.8 
-    },
-    "SPENDER": {
-        "products": ["Кредитная карта", "Премиальная карта"],
-        "multiplier": 1.5
-    },
-    "TRAVELER": {
-        "products": ["Карта для путешествий", "Депозит Мультивалютный", "Обмен валют"],
-        "multiplier": 1.7
-    },
-    # ИЗМЕНЕНИЕ 4.1: Профиль "ИНВЕСТОР" переориентирован на продукты сохранения капитала.
-    "INVESTOR": { 
-        "products": ["Депозит Сберегательный", "Золотые слитки"],
-        "multiplier": 2.5 
-    },
-    # ИЗМЕНЕНИЕ 4.2: Новый профиль для агрессивного продвижения инвестиций начинающим.
-    "NOVICE_INVESTOR": {
-        "products": ["Инвестиции"],
-        "multiplier": 2.2 # Сильный множитель для обеспечения приоритета
-    }
-}
+# --- НОВЫЕ СТРАТЕГИЧЕСКИЕ ПАРАМЕТРЫ ---
+# Порог для определения состоятельного клиента
+WEALTHY_CLIENT_BALANCE_THRESHOLD = 3_000_000
+# Множитель для обеспечения доминирования приоритетных продуктов
+WEALTHY_CLIENT_MULTIPLIER = 100 
 
-# --- Функции-оценщики (score_*) ---
 
+# --- Функции-оценщики (score_*) остаются БЕЗ ИЗМЕНЕНИЙ ---
+# ... (здесь находятся все функции score_* от score_travel_card до score_cash_loan) ...
 def score_travel_card(data: dict) -> Tuple[str, float]:
     transactions = data['transactions_df']
     travel_categories = ['Путешествия', 'Такси', 'Отели']
@@ -80,7 +61,6 @@ def score_fx_exchange(data: dict) -> Tuple[str, float]:
     benefit = fx_volume * FX_SAVING_RATE
     return "Обмен валют", round(benefit, 2)
 
-# ИЗМЕНЕНИЕ 1: Порог входа в инвестиции снижен для привлечения начинающих.
 def score_investments(data: dict) -> Tuple[str, float]:
     balance = data['profile']['avg_monthly_balance_KZT']
     if balance < 50_000: 
@@ -96,7 +76,6 @@ def score_gold_bars(data: dict) -> Tuple[str, float]:
     benefit = investable_amount * GOLD_ANNUAL_YIELD
     return "Золотые слитки", round(benefit, 2)
 
-# ИЗМЕНЕНИЕ 2: Порог для сберегательного депозита повышен. Это продукт для состоятельных.
 def score_sber_deposit(data: dict) -> Tuple[str, float]:
     transfers = data['transfers_df']
     balance = data['profile']['avg_monthly_balance_KZT']
@@ -143,32 +122,45 @@ def score_cash_loan(data: dict) -> Tuple[str, float]:
         return "Кредит наличными", 1.0
     return "Кредит наличными", 0.0
 
-# ИЗМЕНЕНИЕ 3: Введена новая, более точная сегментация клиентов.
-def _get_client_profile_type(data: dict) -> List[str]:
-    profile_tags = []
-    balance = data['profile']['avg_monthly_balance_KZT']
-    total_spending = data['metrics']['total_spending_3m']
-    
-    if balance >= 1_000_000:
-        profile_tags.append("INVESTOR")
-    elif 50_000 <= balance < 1_000_000: # Новый сегмент
-        profile_tags.append("NOVICE_INVESTOR")
 
-    if balance > 200_000 and balance > total_spending:
-        profile_tags.append("SAVER")
-    if total_spending > 500_000 and total_spending > balance * 2:
-        profile_tags.append("SPENDER")
-        
-    transactions = data['transactions_df']
-    travel_spending = transactions[transactions['category'].isin(['Путешествия', 'Такси', 'Отели'])]['amount'].sum()
-    if total_spending > 0 and travel_spending / total_spending > 0.1:
-        profile_tags.append("TRAVELER")
-        
-    return list(set(profile_tags)) # Убираем возможные дубли
+# --- Модуль расчета излишка (без изменений) ---
+def _calculate_monthly_surplus(data: Dict[str, pd.DataFrame]) -> float:
+    transfers = data['transfers_df']
+    total_inflow_transfers = transfers[transfers['type'].str.endswith('_in')]['amount'].sum()
+    total_outflow_transfers = transfers[transfers['type'].str.endswith('_out')]['amount'].sum()
+    total_transactions_spending = data['metrics']['total_spending_3m']
+    total_outflow = total_outflow_transfers + total_transactions_spending
+    surplus_3m = total_inflow_transfers - total_outflow
+    return surplus_3m / 3
 
+# --- УСОВЕРШЕНСТВОВАННАЯ ГЛАВНАЯ ФУНКЦИЯ-ОРКЕСТРАТОР ---
 def rank_top_products(full_data: dict) -> list[tuple[str, float]]:
     if not full_data: return []
 
+    # --- ПРОТОКОЛ ПРИОРИТЕТА: ЭТАП 1 - ИДЕНТИФИКАЦИЯ ---
+    balance = full_data['profile']['avg_monthly_balance_KZT']
+    is_wealthy_client = balance > WEALTHY_CLIENT_BALANCE_THRESHOLD
+    priority_products = ["Депозит Сберегательный", "Золотые слитки", "Депозит Мультивалютный"]
+
+    # === ВРАТА 1: ОПРЕДЕЛЕНИЕ ИСТИНЫ ===
+    monthly_surplus = _calculate_monthly_surplus(full_data)
+    
+    # === ВРАТА 2: ОТСЕЧЕНИЕ ЛИШНЕГО ===
+    segment_whitelist = []
+    if monthly_surplus < 100000:
+        segment_whitelist = ["Кредитная карта", "Карта для путешествий", "Премиальная карта", "Кредит наличными"]
+    elif 100000 <= monthly_surplus < 1000000:
+        segment_whitelist = ["Инвестиции", "Депозит Накопительный"]
+    else: # >= 1000000
+        segment_whitelist = ["Инвестиции", "Золотые слитки", "Депозит Мультивалютный", "Депозит Сберегательный"]
+
+    # --- ПРОТОКОЛ ПРИОРИТЕТА: ЭТАП 2 - ГАРАНТИЯ РАССМОТРЕНИЯ ---
+    if is_wealthy_client:
+        for p in priority_products:
+            if p not in segment_whitelist:
+                segment_whitelist.append(p)
+
+    # === ВРАТА 3: ВОЗВЫШЕНИЕ СИЛЬНЕЙШЕГО ===
     scorers = [
         score_travel_card, score_premium_card, score_credit_card,
         score_fx_exchange, score_investments, score_gold_bars,
@@ -176,36 +168,27 @@ def rank_top_products(full_data: dict) -> list[tuple[str, float]]:
         score_cash_loan,
     ]
     
-    base_results = {product: benefit for product, benefit in [scorer(full_data) for scorer in scorers]}
-    client_profile_tags = _get_client_profile_type(full_data)
+    all_results = {product: benefit for product, benefit in [scorer(full_data) for scorer in scorers]}
     
-    strategic_results = []
-    for product, benefit in base_results.items():
-        new_benefit = benefit
-        for tag in client_profile_tags:
-            if tag in STRATEGIC_COEFFICIENTS and product in STRATEGIC_COEFFICIENTS[tag]["products"]:
-                new_benefit *= STRATEGIC_COEFFICIENTS[tag]["multiplier"]
-        strategic_results.append((product, new_benefit))
+    # --- ПРОТОКОЛ ПРИОРИТЕТА: ЭТАП 3 - ДОМИНИРОВАНИЕ В РЕЙТИНГЕ ---
+    if is_wealthy_client:
+        for product_name in priority_products:
+            if product_name in all_results:
+                all_results[product_name] *= WEALTHY_CLIENT_MULTIPLIER
 
-    strategic_results.sort(key=lambda x: x[1], reverse=True)
-
-    transactions = full_data['transactions_df']
-    current_cards = []
-    if not transactions.empty:
-        current_cards = transactions['product'].unique().tolist()
-
-    final_recommendations = [res for res in strategic_results if res[0] not in current_cards and res[1] > 0]
+    # Применяем фильтр "белого списка"
+    surviving_products_list = [(p, b) for p, b in all_results.items() if p in segment_whitelist and b > 0]
     
-    if len(final_recommendations) < 4:
-        fallback_products = [
-            "Депозит Сберегательный", "Инвестиции", "Премиальная карта",
-            "Кредитная карта", "Депозит Накопительный"
-        ]
-        recommended_product_names = [rec[0] for rec in final_recommendations]
-        for product in fallback_products:
-            if len(final_recommendations) >= 4:
+    # Ранжируем выживших
+    surviving_products_list.sort(key=lambda x: x[1], reverse=True)
+    
+    # Гарантируем наличие 4 рекомендаций
+    if len(surviving_products_list) < 4:
+        recommended_names = [p[0] for p in surviving_products_list]
+        for product_name in segment_whitelist:
+            if len(surviving_products_list) >= 4:
                 break
-            if product not in recommended_product_names and product not in current_cards:
-                final_recommendations.append((product, 0.0))
+            if product_name not in recommended_names:
+                surviving_products_list.append((product_name, 0.0))
 
-    return final_recommendations[:4]
+    return surviving_products_list[:4]
