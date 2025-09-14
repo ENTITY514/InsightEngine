@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { Sparkles } from "lucide-react"
+import { Bot } from "lucide-react"
 
 import type { Client, ClientDashboardData, RecommendationResponse } from "./types/types"
 import { fetchClients, fetchClientData, generateRecommendation } from "./api/clientApi"
@@ -92,7 +92,7 @@ const App: React.FC = () => {
           <header className="mb-10 ">
             <div className="flex items-center mb-4">
               <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mr-4">
-                <Sparkles className="h-6 w-6 text-white" />
+                <Bot className="h-7 w-7 text-white" />
               </div>
               <div>
                 <h1 className="text-4xl font-bold bg-gradient-to-tr from-white to-blue-600 bg-clip-text text-transparent pb-1">
