@@ -1,10 +1,10 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-# ВАЖНО: get_client_profile переименована в get_full_client_data
-from data_processor import get_full_client_data 
-# Импортируем наш "мозг"
+from data_processor import get_full_client_data, get_all_clients
 from logic_engine import find_best_product
-from models import ClientDashboardData, RecommendationRequest, RecommendationResponse
+from notification_generator import generate_push_notification
+from models import ClientDashboardData, RecommendationRequest, RecommendationResponse, ClientInfo
+from typing import List
 
 app = FastAPI(title="InsightEngine API", version="1.0")
 app.add_middleware(
@@ -14,6 +14,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/api/clients", response_model=List[ClientInfo])
+def get_clients_list():
+    """
+    Возвращает список всех клиентов.
+    """
+    return get_all_clients()
 
 @app.get("/api/clients/{client_code}", response_model=ClientDashboardData)
 def get_client_data(client_code: int):
@@ -30,11 +37,10 @@ def get_recommendation(request: RecommendationRequest):
     if not full_data:
         raise HTTPException(status_code=404, detail=f"Client with code {request.client_code} not found")
 
-    # Получаем лучший продукт от нашего движка
     best_product, benefit = find_best_product(request.client_code, full_data)
     
-    # ЗАГЛУШКА для текста пуша (следующий шаг - notification_generator.py)
-    push_text = f"Для вас есть выгодное предложение по продукту '{best_product}' с потенциальной выгодой {benefit} ₸. Подробности скоро."
+    # Генерируем финальный, персонализированный текст
+    push_text = generate_push_notification(best_product, full_data, benefit)
 
     return {
         "product": best_product,

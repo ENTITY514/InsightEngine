@@ -21,3 +21,7 @@ class RecommendationRequest(BaseModel):
 class RecommendationResponse(BaseModel):
     product: str
     push_notification: str
+
+class ClientInfo(BaseModel):
+    client_code: int
+    name: str
